@@ -1,0 +1,15 @@
+{
+  "name": "devsphere",
+  "version": "1.0.0",
+  "private": true,
+  "description": "DevSphere — Distributed developer collaboration platform",
+  "scripts": {
+    "infra:up": "docker compose -f infra/docker-compose.yml up -d",
+    "infra:down": "docker compose -f infra/docker-compose.yml down",
+    "auth": "cd services/auth-service && npm run dev",
+    "gateway": "cd services/api-gateway && npm run dev",
+    "chat": "cd services/chat-service && npm run dev",
+    "frontend": "cd frontend && npm run dev",
+    "install:all": "npm i && cd services/auth-service && npm i && cd ../api-gateway && npm i && cd ../chat-service && npm i && cd ../../frontend && npm i"
+  }
+}
