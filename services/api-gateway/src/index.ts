@@ -6,6 +6,9 @@ import { Pool } from 'pg';
 import { createClient } from 'redis';
 import { rateLimit } from 'express-rate-limit';
 import { workspaceRouter } from './routes/workspaces';
+import { requestLoggerMiddleware } from './logger';
+import { requestLogger } from './middleware/requestLogger';
+import { notFoundHandler, errorHandler } from './middleware/errorHandling';
 
 const app = express();
 const PORT = parseInt(process.env.PORT || '3000', 10);
@@ -28,6 +31,8 @@ let redisClient: ReturnType<typeof createClient> | null = null;
 
 // Security middleware
 app.use(helmet());
+app.use(requestLoggerMiddleware);
+app.use(requestLogger);
 app.use(cors({
   origin: process.env.FRONTEND_URL || 'http://localhost:5173',
   credentials: true,
@@ -65,15 +70,10 @@ app.get('/health', async (_req, res) => {
 app.use('/workspaces', workspaceRouter(pool));
 
 // 404
-app.use((_req, res) => {
-  res.status(404).json({ error: 'Not found' });
-});
+app.use(notFoundHandler);
 
 // Error handler
-app.use((err: Error, _req: express.Request, res: express.Response, _next: express.NextFunction) => {
-  console.error('[api-gateway] unhandled error:', err);
-  res.status(500).json({ error: 'Internal server error' });
-});
+app.use(errorHandler);
 
 async function start() {
   await pool.query('SELECT 1');

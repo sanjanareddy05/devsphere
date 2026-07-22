@@ -39,6 +39,62 @@ services:
       timeout: 3s
       retries: 5
 
+  auth-service:
+    build:
+      context: ../services/auth-service
+    environment:
+      NODE_ENV: production
+      PORT: 3001
+      JWT_ACCESS_SECRET: dev_access_secret
+      JWT_REFRESH_SECRET: dev_refresh_secret
+      DATABASE_URL: postgresql://devsphere:devsphere@postgres:5432/devsphere
+      FRONTEND_URL: http://localhost:5173
+    depends_on:
+      postgres:
+        condition: service_healthy
+    ports:
+      - "3001:3001"
+
+  api-gateway:
+    build:
+      context: ../services/api-gateway
+    environment:
+      NODE_ENV: production
+      PORT: 3000
+      JWT_ACCESS_SECRET: dev_access_secret
+      DATABASE_URL: postgresql://devsphere:devsphere@postgres:5432/devsphere
+      REDIS_URL: redis://redis:6379
+      FRONTEND_URL: http://localhost:5173
+      APP_URL: http://localhost:5173
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    ports:
+      - "3000:3000"
+
+  chat-service:
+    build:
+      context: ../services/chat-service
+    environment:
+      NODE_ENV: production
+      PORT: 3002
+      JWT_ACCESS_SECRET: dev_access_secret
+      MONGODB_URI: mongodb://mongo:27017/devsphere
+      FRONTEND_URL: http://localhost:5173
+    depends_on:
+      mongo:
+        condition: service_healthy
+    ports:
+      - "3002:3002"
+
+  frontend:
+    build:
+      context: ../frontend
+    ports:
+      - "5173:80"
+
   # Phase 4+ — uncomment when needed
   # elasticsearch:
   #   image: docker.elastic.co/elasticsearch/elasticsearch:8.13.0

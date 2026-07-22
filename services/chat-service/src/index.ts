@@ -6,6 +6,7 @@ import { Server } from 'socket.io';
 import { connectMongo } from './db';
 import { registerSocketHandlers } from './socketHandlers';
 import messagesRouter from './routes/messages';
+import { requestLogger } from './logger';
 
 const app = express();
 const server = http.createServer(app);
@@ -23,6 +24,7 @@ const io = new Server(server, {
   pingInterval: 25000,
 });
 
+app.use(requestLogger);
 app.use(cors({ origin: FRONTEND_URL, credentials: true }));
 app.use(express.json());
 

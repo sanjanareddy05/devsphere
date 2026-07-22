@@ -3,6 +3,8 @@ import express from 'express';
 import cors from 'cors';
 import cookieParser from 'cookie-parser';
 import authRouter from './routes/auth';
+import auditRouter from './routes/audit';
+import { requestLogger } from './logger';
 import { pool } from './db';
 
 const app = express();
@@ -13,6 +15,7 @@ app.use(cors({
   origin: process.env.FRONTEND_URL || 'http://localhost:5173',
   credentials: true,
 }));
+app.use(requestLogger);
 app.use(express.json());
 app.use(cookieParser());
 
@@ -23,6 +26,7 @@ app.get('/health', (_req, res) => {
 
 // Routes
 app.use('/auth', authRouter);
+app.use('/audit', auditRouter);
 
 // Start
 async function start() {

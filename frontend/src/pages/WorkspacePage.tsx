@@ -1,10 +1,11 @@
 import { useEffect, useRef } from 'react';
-import { Hash, Lock, Users, Wifi, WifiOff } from 'lucide-react';
+import { Hash, Lock, Users, Wifi, WifiOff, CheckCircle2 } from 'lucide-react';
 import { useAuthStore } from '@/store/authStore';
 import { useWorkspaceStore } from '@/store/workspaceStore';
 import { useChatStore } from '@/store/chatStore';
 import { getSocket } from '@/socket';
 import { Message } from '@/api/messages';
+import { workspaceApi, PendingInvite } from '@/api/workspaces';
 import Sidebar from '@/components/Sidebar';
 import MessageList from '@/components/MessageList';
 import MessageInput from '@/components/MessageInput';
@@ -23,9 +24,12 @@ function ConnectionStatus({ connected }: { connected: boolean }) {
 
 export default function WorkspacePage() {
   const { accessToken } = useAuthStore();
-  const { activeChannel, activeWorkspace } = useWorkspaceStore();
+  const { activeChannel, activeWorkspace, setWorkspaces, setActiveWorkspace } = useWorkspaceStore();
   const { addMessage, setTyping, clearTyping, setPresence } = useChatStore();
   const [socketConnected, setSocketConnected] = useState(false);
+  const [pendingInvites, setPendingInvites] = useState<PendingInvite[]>([]);
+  const [acceptingInviteToken, setAcceptingInviteToken] = useState<string | null>(null);
+  const [inviteNotice, setInviteNotice] = useState<string | null>(null);
   const joinedChannelRef = useRef<string | null>(null);
 
   // Boot the socket once (stays alive for the session)
@@ -67,6 +71,33 @@ export default function WorkspacePage() {
     socket.emit('join_channel', { channelId: activeChannel.id });
     joinedChannelRef.current = activeChannel.id;
   }, [activeChannel?.id]);
+
+  useEffect(() => {
+    if (!accessToken) return;
+    workspaceApi.pendingInvites()
+      .then(setPendingInvites)
+      .catch((err) => console.error('Failed to load invites', err));
+  }, [accessToken]);
+
+  const handleAcceptInvite = async (token: string) => {
+    setAcceptingInviteToken(token);
+    setInviteNotice(null);
+    try {
+      await workspaceApi.acceptInvite(token);
+      setPendingInvites((prev) => prev.filter((invite) => invite.token !== token));
+      setInviteNotice('Invite accepted. Reloading your workspaces...');
+      const refreshed = await workspaceApi.list();
+      setWorkspaces(refreshed);
+      if (refreshed.length > 0) {
+        setActiveWorkspace(refreshed[0]);
+      }
+    } catch (err) {
+      console.error('Failed to accept invite', err);
+      setInviteNotice('Unable to accept that invite right now.');
+    } finally {
+      setAcceptingInviteToken(null);
+    }
+  };
 
   return (
     <div className="flex h-screen overflow-hidden bg-surface-900">
@@ -121,6 +152,36 @@ export default function WorkspacePage() {
                 ? 'Choose a channel from the sidebar to start collaborating with your team.'
                 : 'Select or create a workspace from the sidebar to get started.'}
             </p>
+
+            {pendingInvites.length > 0 && (
+              <div className="mt-6 w-full max-w-md rounded-xl border border-brand/20 bg-brand/10 p-4 text-left">
+                <div className="flex items-center gap-2 text-sm font-medium text-slate-100">
+                  <CheckCircle2 className="w-4 h-4 text-brand" />
+                  You have pending workspace invites
+                </div>
+                <div className="mt-3 space-y-2">
+                  {pendingInvites.map((invite) => (
+                    <div key={invite.id} className="flex items-center justify-between gap-3 rounded-lg bg-surface-800/70 px-3 py-2">
+                      <div>
+                        <p className="text-sm text-slate-200">{invite.workspace_name}</p>
+                        <p className="text-xs text-slate-500">{invite.role === 'admin' ? 'Admin access' : 'Member access'}</p>
+                      </div>
+                      <button
+                        onClick={() => void handleAcceptInvite(invite.token)}
+                        disabled={acceptingInviteToken === invite.token}
+                        className="rounded-lg bg-brand px-3 py-1.5 text-sm font-medium text-white transition-colors hover:bg-brand/90 disabled:opacity-60"
+                      >
+                        {acceptingInviteToken === invite.token ? 'Accepting...' : 'Accept'}
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {inviteNotice && (
+              <p className="mt-3 text-sm text-emerald-400">{inviteNotice}</p>
+            )}
           </div>
         )}
       </main>

@@ -10,6 +10,7 @@ import {
 } from '../tokens';
 import { registerSchema, loginSchema } from '../schemas';
 import { requireAuth } from '../middleware/requireAuth';
+import { logAuditEvent } from '../audit';
 
 const router = Router();
 const SALT_ROUNDS = 10;
@@ -72,6 +73,7 @@ router.post('/register', async (req: Request, res: Response): Promise<void> => {
     );
 
     setCookieAndRespond(res, accessToken, refreshToken);
+    await logAuditEvent({ action: 'user_registered', userId: user.id, target: user.email, metadata: { email: user.email } });
     res.status(201).json({ user: { id: user.id, email: user.email, name: user.name }, accessToken });
   } catch (err) {
     console.error('[register]', err);
@@ -111,6 +113,7 @@ router.post('/login', async (req: Request, res: Response): Promise<void> => {
     );
 
     setCookieAndRespond(res, accessToken, refreshToken);
+    await logAuditEvent({ action: 'user_logged_in', userId: user.id, target: user.email, metadata: { email: user.email } });
     res.status(200).json({
       user: { id: user.id, email: user.email, name: user.name, avatar_url: user.avatar_url },
       accessToken,
@@ -174,7 +177,9 @@ router.post('/logout', async (req: Request, res: Response): Promise<void> => {
     }
   }
 
+  const userId = (req as Request & { userId?: string }).userId;
   res.clearCookie('refresh_token', { path: '/auth/refresh' });
+  void logAuditEvent({ action: 'user_logged_out', userId, metadata: { source: 'auth' } });
   res.status(200).json({ message: 'Logged out successfully' });
 });
 

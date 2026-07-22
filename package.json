@@ -10,6 +10,8 @@
     "gateway": "cd services/api-gateway && npm run dev",
     "chat": "cd services/chat-service && npm run dev",
     "frontend": "cd frontend && npm run dev",
-    "install:all": "npm i && cd services/auth-service && npm i && cd ../api-gateway && npm i && cd ../chat-service && npm i && cd ../../frontend && npm i"
+    "install:all": "npm i && cd services/auth-service && npm i && cd ../api-gateway && npm i && cd ../chat-service && npm i && cd ../../frontend && npm i",
+    "seed:demo": "cd services/auth-service && node scripts/seed-demo-data.js",
+    "load:test": "cd services/auth-service && node scripts/load-test.js"
   }
 }

@@ -2,7 +2,46 @@ import { Router, Request, Response } from 'express';
 import crypto from 'crypto';
 import { Pool } from 'pg';
 import { z } from 'zod';
+import { createTransport, type Transporter } from 'nodemailer';
 import { requireAuth } from '../middleware/requireAuth';
+import { logAuditEvent } from '../audit';
+
+let transporter: Transporter | null = null;
+
+function getTransporter() {
+  if (transporter) return transporter;
+
+  const host = process.env.SMTP_HOST;
+  if (!host) return null;
+
+  transporter = createTransport({
+    host,
+    port: Number(process.env.SMTP_PORT || 587),
+    secure: process.env.SMTP_SECURE === 'true',
+    auth: process.env.SMTP_USER && process.env.SMTP_PASS
+      ? { user: process.env.SMTP_USER, pass: process.env.SMTP_PASS }
+      : undefined,
+  });
+
+  return transporter;
+}
+
+async function sendInviteEmail(email: string, workspaceName: string, acceptUrl: string) {
+  const mailer = getTransporter();
+  if (!mailer || !process.env.SMTP_FROM) {
+    return false;
+  }
+
+  await mailer.sendMail({
+    from: process.env.SMTP_FROM,
+    to: email,
+    subject: `You’ve been invited to ${workspaceName}`,
+    text: `You’ve been invited to join ${workspaceName}. Accept your invite here: ${acceptUrl}`,
+    html: `<p>You’ve been invited to join <strong>${workspaceName}</strong>.</p><p><a href="${acceptUrl}">Accept invite</a></p>`,
+  });
+
+  return true;
+}
 
 export function workspaceRouter(pool: Pool) {
   const router = Router();
@@ -92,6 +131,26 @@ export function workspaceRouter(pool: Pool) {
     }
   });
 
+  // GET /workspaces/invites — pending invites for the current user
+  router.get('/invites', async (req: Request, res: Response): Promise<void> => {
+    try {
+      const { rows } = await pool.query(
+        `SELECT it.id, it.token, it.workspace_id, w.name AS workspace_name, it.role, it.expires_at, it.created_at
+         FROM invite_tokens it
+         JOIN workspaces w ON w.id = it.workspace_id
+         WHERE lower(it.invitee_email) = lower($1)
+           AND it.used_at IS NULL
+           AND it.expires_at > now()
+         ORDER BY it.created_at DESC`,
+        [req.userEmail]
+      );
+      res.json({ invites: rows });
+    } catch (err) {
+      console.error('[workspace:invites]', err);
+      res.status(500).json({ error: 'Failed to fetch invites' });
+    }
+  });
+
   // GET /workspaces/:id — workspace detail with member count
   router.get('/:id', async (req: Request, res: Response): Promise<void> => {
     try {
@@ -156,12 +215,22 @@ export function workspaceRouter(pool: Pool) {
       );
 
       const acceptUrl = `${process.env.APP_URL || 'http://localhost:5173'}/accept-invite?token=${token}`;
+      const emailSent = await sendInviteEmail(parsed.data.email, workspace.name, acceptUrl);
+      logAuditEvent({
+        action: 'workspace_invite_created',
+        userId: req.userId,
+        workspaceId: workspace.id,
+        target: parsed.data.email,
+        metadata: { role: parsed.data.role, emailSent },
+      });
+
       res.status(200).json({
         message: 'Invite sent',
         token,
         acceptUrl,
         workspaceName: workspace.name,
         email: parsed.data.email,
+        emailSent,
       });
     } catch (err) {
       console.error('[workspace:invite]', err);
@@ -217,6 +286,14 @@ export function workspaceRouter(pool: Pool) {
         `UPDATE invite_tokens SET used_at = now() WHERE id = $1`,
         [invite.id]
       );
+
+      logAuditEvent({
+        action: 'workspace_invite_accepted',
+        userId: user.id,
+        workspaceId: invite.workspace_id,
+        target: invite.invitee_email,
+        metadata: { role: invite.role },
+      });
 
       res.status(200).json({ message: 'Invite accepted', workspaceId: invite.workspace_id });
     } catch (err) {

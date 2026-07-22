@@ -69,3 +69,17 @@ CREATE TABLE IF NOT EXISTS invite_tokens (
 );
 CREATE INDEX IF NOT EXISTS idx_invite_tokens_workspace ON invite_tokens(workspace_id);
 CREATE INDEX IF NOT EXISTS idx_invite_tokens_email ON invite_tokens(invitee_email);
+
+-- Audit log storage
+CREATE TABLE IF NOT EXISTS audit_logs (
+  id           UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  event_id     TEXT UNIQUE NOT NULL,
+  action       TEXT NOT NULL,
+  user_id      UUID REFERENCES users(id) ON DELETE SET NULL,
+  workspace_id UUID REFERENCES workspaces(id) ON DELETE SET NULL,
+  target       TEXT,
+  metadata     JSONB DEFAULT '{}'::jsonb,
+  created_at   TIMESTAMPTZ DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS idx_audit_logs_action ON audit_logs(action);
+CREATE INDEX IF NOT EXISTS idx_audit_logs_created_at ON audit_logs(created_at DESC);

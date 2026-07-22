@@ -27,11 +27,24 @@ export interface Member {
   joined_at: string;
 }
 
+export interface PendingInvite {
+  id: string;
+  token: string;
+  workspace_id: string;
+  workspace_name: string;
+  role: 'admin' | 'member';
+  expires_at: string;
+  created_at: string;
+}
+
 export const workspaceApi = {
   buildInviteUrl: (token: string) => `${window.location.origin}/accept-invite?token=${token}`,
 
   list: () =>
     api.get<{ workspaces: Workspace[] }>('/api/workspaces').then((r) => r.data.workspaces),
+
+  pendingInvites: () =>
+    api.get<{ invites: PendingInvite[] }>('/api/workspaces/invites').then((r) => r.data.invites),
 
   create: (name: string) =>
     api

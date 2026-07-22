@@ -92,7 +92,7 @@ npm run frontend
 
 Open http://localhost:5173 → Register → Create a workspace → Invite members → Start chatting.
 
-Note: The current invite flow immediately adds a user by email and therefore the invitee must already have an account in the system. An email-based accept/decline invitation flow is not implemented yet.
+Note: The invite experience now supports a token-based invite link and acceptance flow. If SMTP is configured, the service will also attempt to send an email with the acceptance link; otherwise it returns the link directly in the API response and UI.
 
 ## Key Engineering Decisions
 
