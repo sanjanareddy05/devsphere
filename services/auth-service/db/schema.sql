@@ -54,3 +54,18 @@ CREATE TABLE IF NOT EXISTS refresh_tokens (
   created_at TIMESTAMPTZ DEFAULT now()
 );
 CREATE INDEX IF NOT EXISTS idx_refresh_tokens_user ON refresh_tokens(user_id);
+
+-- Workspace invite tokens
+CREATE TABLE IF NOT EXISTS invite_tokens (
+  id           UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  workspace_id UUID REFERENCES workspaces(id) ON DELETE CASCADE,
+  inviter_id   UUID REFERENCES users(id) ON DELETE CASCADE,
+  invitee_email TEXT NOT NULL,
+  token        TEXT UNIQUE NOT NULL,
+  role         TEXT NOT NULL DEFAULT 'member',
+  expires_at   TIMESTAMPTZ NOT NULL,
+  used_at      TIMESTAMPTZ,
+  created_at   TIMESTAMPTZ DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS idx_invite_tokens_workspace ON invite_tokens(workspace_id);
+CREATE INDEX IF NOT EXISTS idx_invite_tokens_email ON invite_tokens(invitee_email);

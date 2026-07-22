@@ -28,6 +28,8 @@ export interface Member {
 }
 
 export const workspaceApi = {
+  buildInviteUrl: (token: string) => `${window.location.origin}/accept-invite?token=${token}`,
+
   list: () =>
     api.get<{ workspaces: Workspace[] }>('/api/workspaces').then((r) => r.data.workspaces),
 
@@ -41,6 +43,9 @@ export const workspaceApi = {
 
   invite: (workspaceId: string, email: string, role: 'admin' | 'member' = 'member') =>
     api.post(`/api/workspaces/${workspaceId}/invite`, { email, role }).then((r) => r.data),
+
+  acceptInvite: (token: string) =>
+    api.post('/api/workspaces/accept-invite', { token }).then((r) => r.data),
 
   members: (workspaceId: string) =>
     api

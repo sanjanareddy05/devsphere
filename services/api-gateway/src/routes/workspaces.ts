@@ -1,4 +1,5 @@
 import { Router, Request, Response } from 'express';
+import crypto from 'crypto';
 import { Pool } from 'pg';
 import { z } from 'zod';
 import { requireAuth } from '../middleware/requireAuth';
@@ -22,6 +23,10 @@ export function workspaceRouter(pool: Pool) {
   const inviteSchema = z.object({
     email: z.string().email(),
     role: z.enum(['admin', 'member']).optional().default('member'),
+  });
+
+  const acceptInviteSchema = z.object({
+    token: z.string().min(10),
   });
 
   // POST /workspaces — create a new workspace
@@ -123,7 +128,6 @@ export function workspaceRouter(pool: Pool) {
     }
 
     try {
-      // Check requester is admin
       const { rows: [requesterMembership] } = await pool.query(
         `SELECT role FROM memberships WHERE user_id = $1 AND workspace_id = $2`,
         [req.userId, req.params.id]
@@ -133,27 +137,90 @@ export function workspaceRouter(pool: Pool) {
         return;
       }
 
-      // Look up invitee by email
-      const { rows: [invitee] } = await pool.query(
-        `SELECT id, email, name FROM users WHERE email = $1`,
-        [parsed.data.email]
+      const { rows: [workspace] } = await pool.query(
+        `SELECT id, name FROM workspaces WHERE id = $1`,
+        [req.params.id]
       );
-      if (!invitee) {
-        res.status(404).json({ error: 'User not found with that email' });
+      if (!workspace) {
+        res.status(404).json({ error: 'Workspace not found' });
         return;
       }
 
-      // Add membership (upsert to handle re-invites gracefully)
+      const token = crypto.randomBytes(24).toString('hex');
+      const expiresAt = new Date(Date.now() + 1000 * 60 * 60 * 24 * 2).toISOString();
+
+      await pool.query(
+        `INSERT INTO invite_tokens (workspace_id, inviter_id, invitee_email, token, role, expires_at)
+         VALUES ($1, $2, $3, $4, $5, $6)`,
+        [workspace.id, req.userId, parsed.data.email, token, parsed.data.role, expiresAt]
+      );
+
+      const acceptUrl = `${process.env.APP_URL || 'http://localhost:5173'}/accept-invite?token=${token}`;
+      res.status(200).json({
+        message: 'Invite sent',
+        token,
+        acceptUrl,
+        workspaceName: workspace.name,
+        email: parsed.data.email,
+      });
+    } catch (err) {
+      console.error('[workspace:invite]', err);
+      res.status(500).json({ error: 'Internal server error' });
+    }
+  });
+
+  // POST /workspaces/accept-invite — accept invite token
+  router.post('/accept-invite', async (req: Request, res: Response): Promise<void> => {
+    const parsed = acceptInviteSchema.safeParse(req.body);
+    if (!parsed.success) {
+      res.status(400).json({ error: 'Validation failed', details: parsed.error.flatten() });
+      return;
+    }
+
+    try {
+      const { rows: [invite] } = await pool.query(
+        `SELECT id, workspace_id, invitee_email, role, used_at, expires_at
+         FROM invite_tokens
+         WHERE token = $1`,
+        [parsed.data.token]
+      );
+      if (!invite) {
+        res.status(404).json({ error: 'Invite token not found' });
+        return;
+      }
+      if (invite.used_at) {
+        res.status(409).json({ error: 'Invite already used' });
+        return;
+      }
+      if (new Date(invite.expires_at) < new Date()) {
+        res.status(410).json({ error: 'Invite expired' });
+        return;
+      }
+
+      const { rows: [user] } = await pool.query(
+        `SELECT id, email FROM users WHERE email = $1`,
+        [invite.invitee_email]
+      );
+      if (!user) {
+        res.status(404).json({ error: 'Please sign up before accepting this invite' });
+        return;
+      }
+
       await pool.query(
         `INSERT INTO memberships (user_id, workspace_id, role)
          VALUES ($1, $2, $3)
          ON CONFLICT (user_id, workspace_id) DO UPDATE SET role = EXCLUDED.role`,
-        [invitee.id, req.params.id, parsed.data.role]
+        [user.id, invite.workspace_id, invite.role]
       );
 
-      res.status(200).json({ message: 'Member added', user: { id: invitee.id, email: invitee.email, name: invitee.name } });
+      await pool.query(
+        `UPDATE invite_tokens SET used_at = now() WHERE id = $1`,
+        [invite.id]
+      );
+
+      res.status(200).json({ message: 'Invite accepted', workspaceId: invite.workspace_id });
     } catch (err) {
-      console.error('[workspace:invite]', err);
+      console.error('[workspace:accept-invite]', err);
       res.status(500).json({ error: 'Internal server error' });
     }
   });

@@ -38,7 +38,7 @@ function Avatar({ name }: { name: string }) {
   );
 }
 
-export default function MessageList({ channelId, workspaceId }: Props) {
+export default function MessageList({ channelId }: Props) {
   const user = useAuthStore((s) => s.user);
   const { messagesByChannel, cursors, hasMore, setMessages, prependMessages, typingUsers } = useChatStore();
   const messages = messagesByChannel[channelId] ?? [];

@@ -3,7 +3,7 @@ import { Hash, Lock, Users, Wifi, WifiOff } from 'lucide-react';
 import { useAuthStore } from '@/store/authStore';
 import { useWorkspaceStore } from '@/store/workspaceStore';
 import { useChatStore } from '@/store/chatStore';
-import { getSocket, disconnectSocket } from '@/socket';
+import { getSocket } from '@/socket';
 import { Message } from '@/api/messages';
 import Sidebar from '@/components/Sidebar';
 import MessageList from '@/components/MessageList';

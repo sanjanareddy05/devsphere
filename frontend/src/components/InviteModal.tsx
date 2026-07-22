@@ -13,6 +13,7 @@ export default function InviteModal({ workspaceId, onClose }: Props) {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
+  const [inviteToken, setInviteToken] = useState('');
 
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
@@ -21,7 +22,8 @@ export default function InviteModal({ workspaceId, onClose }: Props) {
     setSuccess('');
     try {
       const res = await workspaceApi.invite(workspaceId, email.trim(), role);
-      setSuccess(`${res.user.name} (${res.user.email}) added as ${role}`);
+      setInviteToken(res.token || '');
+      setSuccess(`Invite link ready for ${res.email}. Open the link below to accept it.`);
       setEmail('');
     } catch (err: unknown) {
       const msg = (err as { response?: { data?: { error?: string } } })?.response?.data?.error;
@@ -42,9 +44,14 @@ export default function InviteModal({ workspaceId, onClose }: Props) {
         <form onSubmit={handleSubmit} className="space-y-4">
           {error && <p className="text-sm text-red-400 bg-red-400/10 px-3 py-2 rounded-lg">{error}</p>}
           {success && (
-            <div className="flex items-center gap-2 text-sm text-emerald-400 bg-emerald-400/10 px-3 py-2 rounded-lg">
-              <CheckCircle2 className="w-4 h-4 shrink-0" />
-              {success}
+            <div className="space-y-2 text-sm text-emerald-400 bg-emerald-400/10 px-3 py-2 rounded-lg">
+              <div className="flex items-center gap-2">
+                <CheckCircle2 className="w-4 h-4 shrink-0" />
+                {success}
+              </div>
+              <a href={workspaceApi.buildInviteUrl(inviteToken)} className="text-xs underline break-all" target="_blank" rel="noreferrer">
+                Open invite link
+              </a>
             </div>
           )}
 
